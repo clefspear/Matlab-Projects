@@ -1,0 +1,144 @@
+clear all
+clc
+
+% Define the path to search for JPEG files
+pathToSearch = '';
+
+% Create the output folder if it doesn't exist
+outputFolder = fullfile(pathToSearch, 'thumbnails');
+thumbnailFolderNumber = 1;
+
+while isfolder(outputFolder)
+    thumbnailFolderNumber = thumbnailFolderNumber + 1;
+    outputFolder = fullfile(pathToSearch, ['thumbnails', num2str(thumbnailFolderNumber)]);
+end
+
+mkdir(outputFolder);
+
+% Search for JPEG files recursively
+fileList = dir(fullfile(pathToSearch, '**', '*.jpg'));
+
+% Calculate the number of files found
+numFiles = numel(fileList);
+
+% Read folder name
+folder = dir(pathToSearch);
+
+% Calculate the number of rows and columns for image arrangement
+numColumns = 5;
+numRows = min(10, ceil(numFiles / numColumns));
+imageSize = 300;
+
+% Define the size of each image and the margin
+imageWidth = 300; % Width of each image
+imageHeight = 0; % Initialize height of each image
+
+% Create a list to store unique image names
+uniqueNames = {};
+foldername = {};
+
+% Keep track of the sequence number for the final image
+sequenceNumber = 0;
+
+% Copy, resize, and place the JPEG files on the canvas
+for i = 1:numFiles
+    sourceFile = fullfile(fileList(i).folder, fileList(i).name);
+    destinationFile = fullfile(outputFolder, fileList(i).name);
+
+    % Check if the image with the same name already exists
+    if ismember(fileList(i).name, uniqueNames)
+        % Generate a unique name by appending a digit at the end
+        [~, name, ext] = fileparts(fileList(i).name);
+        j = 1;
+        while ismember([name, '_', num2str(j), ext], uniqueNames)
+            j = j + 1;
+        end
+        newFileName = [name, '_', num2str(j), ext];
+        destinationFile = fullfile(outputFolder, newFileName);
+    end
+
+
+    % Read the original image
+    originalImage = imread(sourceFile);
+
+    % Calculate the width and height of the resized image while maintaining aspect ratio
+    [originalHeight, originalWidth, ~] = size(originalImage);
+    if originalHeight > originalWidth
+        resizedHeight = 300;
+        resizedWidth = round(originalWidth * resizedHeight / originalHeight);
+    else
+        resizedWidth = 300;
+        resizedHeight = round(originalHeight * resizedWidth / originalWidth);
+    end
+
+    % Update imageHeight if resizedHeight is greater
+    if resizedHeight > imageHeight
+        imageHeight = resizedHeight;
+    end
+
+    % Resize the image while maintaining aspect ratio
+    resizedImage = imresize(originalImage, [resizedHeight, resizedWidth]);
+
+    % Write the resized image to the output folder
+    imwrite(resizedImage, destinationFile);
+
+   
+    % Add the image name to the list of unique names
+    uniqueNames = [uniqueNames, fileList(i).name];
+    foldername = [foldername,folder(i+2).name];
+
+    % Check if it's the 48th image or the last image
+    if mod(i, 48) == 0 || i == numFiles
+        % Calculate the canvas size based on image dimensions and margins
+        margin = 50;
+        canvasWidth = numColumns * (imageWidth + margin) + margin;
+        canvasHeight = numRows * (imageHeight + margin) + margin;
+        canvas = uint8(255 * ones(canvasHeight, canvasWidth, 3)); % RGB image
+
+        % j ranges from canvas#*Num of resized images : numel(unqieNames)
+        % Canvas# = intiger division (numerl(uniqueNames
+        % Copy, resize, and place the JPEG files on the canvas
+        for j = (sequenceNumber*48)+1:numel(uniqueNames)
+            sourceFile = fullfile(outputFolder, uniqueNames{j});
+
+            % Read the resized image
+            resizedImage = imread(sourceFile);
+
+            % Create the rectangle with margin
+            row = ceil(mod(j, 48) / numColumns);
+            col = mod(mod(j, 48) - 1, numColumns) + 1;
+            if row == 0
+                row = 10;
+                col = 3;
+            end
+            
+            startX = (col - 1) * (imageWidth + margin) + margin;
+            startY = (row - 1) * (imageHeight + margin) + margin;
+            endX = startX + size(resizedImage, 2) - 1;
+            endY = startY + size(resizedImage, 1) - 1;
+
+            % Place the resized image on the canvas
+            canvas(startY:endY, startX:endX, :) = resizedImage;
+
+            % Add text with the name of the JPEG file under the image
+            textPositionX = startX + round(imageSize / 2);
+            textPositionY = endY + 30; % Adjust the vertical position as needed
+            foldername(j);
+            canvas = insertText(canvas, [textPositionX, textPositionY], foldername(j), 'FontSize', 30, 'TextColor', 'black', 'AnchorPoint', 'Center', 'BoxColor','white');
+        end
+
+        % Save the final image with the sequence number in the filename
+        finalImageFile = fullfile(outputFolder, ['final_image-', num2str(sequenceNumber+1), '.jpg']);
+        imwrite(canvas, finalImageFile);
+
+        % Display the number of files processed and the path to the final image
+        disp(['Processed ', num2str(numel(uniqueNames)), ' unique JPG files to the output folder, thumbnails']);
+        disp(['Final image saved at: ', finalImageFile]);
+
+        % Clear the uniqueNames list for the next set of images
+        % uniqueNames = {};
+
+        % Increment the sequence number for the next final image
+        sequenceNumber = sequenceNumber + 1;
+    end
+end
